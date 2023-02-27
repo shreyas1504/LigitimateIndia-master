@@ -1,0 +1,328 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_mobx/flutter_mobx.dart';
+import 'package:nb_utils/nb_utils.dart';
+import 'package:socialv/components/loading_widget.dart';
+import 'package:socialv/components/no_data_lottie_widget.dart';
+import 'package:socialv/main.dart';
+import 'package:socialv/models/members/friend_request_model.dart';
+import 'package:socialv/models/members/member_response.dart';
+import 'package:socialv/network/rest_apis.dart';
+import 'package:socialv/screens/profile/screens/member_profile_screen.dart';
+import 'package:socialv/utils/app_constants.dart';
+import 'package:socialv/utils/cached_network_image.dart';
+
+class MembersListScreen extends StatefulWidget {
+  final bool isSuggested;
+
+  MembersListScreen({this.isSuggested = false});
+
+  @override
+  State<MembersListScreen> createState() => _MembersListScreenState();
+}
+
+class _MembersListScreenState extends State<MembersListScreen> {
+  List<MemberResponse> memberList = [];
+  List<FriendRequestModel> suggestedMemberList = [];
+  ScrollController _controller = ScrollController();
+  Future<List<MemberResponse>>? future;
+  Future<List<FriendRequestModel>>? futureSuggestedList;
+
+  int mPage = 1;
+  bool mIsLastPage = false;
+  bool isError = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.isSuggested.validate()) {
+      futureSuggestedList = getSuggestedList();
+    } else {
+      future = getMembersList();
+    }
+  }
+
+  Future<List<MemberResponse>> getMembersList() async {
+    appStore.setLoading(true);
+
+    await getAllMembers(page: mPage).then((value) {
+      mIsLastPage = value.length != 20;
+      if (mPage == 1) memberList.clear();
+      memberList.addAll(value);
+      setState(() {});
+      appStore.setLoading(false);
+    }).catchError((e) {
+      isError = true;
+      appStore.setLoading(false);
+      toast(e.toString());
+    });
+    return memberList;
+  }
+
+  Future<List<FriendRequestModel>> getSuggestedList() async {
+    appStore.setLoading(true);
+
+    await getSuggestedUserList(page: mPage).then((value) {
+      mIsLastPage = value.length != 20;
+      if (mPage == 1) suggestedMemberList.clear();
+      suggestedMemberList.addAll(value);
+      setState(() {});
+      appStore.setLoading(false);
+    }).catchError((e) {
+      isError = true;
+      appStore.setLoading(false);
+      toast(e.toString());
+    });
+    return suggestedMemberList;
+  }
+
+  @override
+  void setState(VoidCallback fn) {
+    if (mounted) super.setState(fn);
+  }
+
+  @override
+  void dispose() {
+    if (appStore.isLoading) appStore.setLoading(false);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        iconTheme: IconThemeData(color: context.iconColor),
+        title: Text(language.members, style: boldTextStyle(size: 20)),
+        elevation: 0,
+        centerTitle: true,
+      ),
+      body: Stack(
+        alignment: Alignment.topCenter,
+        children: [
+          if (widget.isSuggested)
+            FutureBuilder<List<FriendRequestModel>>(
+              future: futureSuggestedList,
+              builder: (ctx, snap) {
+                if (snap.hasError) {
+                  return NoDataWidget(
+                    imageWidget: NoDataLottieWidget(),
+                    title: isError ? language.somethingWentWrong : language.noDataFound,
+                    onRetry: () {
+                      future = getMembersList();
+                    },
+                    retryText: '   ${language.clickToRefresh}   ',
+                  ).center();
+                }
+                if (snap.hasData) {
+                  if (snap.data.validate().isEmpty) {
+                    return NoDataWidget(
+                      imageWidget: NoDataLottieWidget(),
+                      title: isError ? language.somethingWentWrong : language.noDataFound,
+                      onRetry: () {
+                        future = getMembersList();
+                      },
+                      retryText: '   ${language.clickToRefresh}   ',
+                    ).center();
+                  } else {
+                    return AnimatedListView(
+                      shrinkWrap: true,
+                      controller: _controller,
+                      disposeScrollController: false,
+                      physics: AlwaysScrollableScrollPhysics(),
+                      slideConfiguration: SlideConfiguration(delay: 120.milliseconds),
+                      padding: EdgeInsets.only(left: 16, right: 16, bottom: 50),
+                      itemCount: suggestedMemberList.length,
+                      itemBuilder: (context, index) {
+                        FriendRequestModel member = suggestedMemberList[index];
+                        return GestureDetector(
+                          onTap: () {
+                            MemberProfileScreen(memberId: member.userId.validate()).launch(context);
+                          },
+                          child: Row(
+                            children: [
+                              cachedImage(
+                                member.userImage.validate(),
+                                height: 56,
+                                width: 56,
+                                fit: BoxFit.cover,
+                              ).cornerRadiusWithClipRRect(100),
+                              20.width,
+                              Column(
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        member.userName.validate(),
+                                        style: boldTextStyle(),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ).flexible(flex: 1),
+                                      if (member.isUserVerified.validate()) Image.asset(ic_tick_filled, width: 18, height: 18, color: blueTickColor).paddingSymmetric(horizontal: 4),
+                                    ],
+                                  ),
+                                  6.height,
+                                  Text(
+                                    member.userMentionName.validate(),
+                                    style: secondaryTextStyle(),
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                  ),
+                                ],
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                              ).expand(),
+                              Row(
+                                children: [
+                                  InkWell(
+                                    child: cachedImage(ic_plus, height: 26, width: 26, color: context.primaryColor, fit: BoxFit.cover),
+                                    onTap: () {
+                                      ifNotTester(() async {
+                                        member.isRequested = !member.isRequested.validate();
+                                        setState(() {});
+
+                                        ifNotTester(() async {
+                                          Map request = {"initiator_id": appStore.loginUserId, "friend_id": member.userId.validate()};
+                                          await requestNewFriend(request).then((value) async {
+                                            //
+                                          }).catchError((e) {
+                                            member.isRequested = !member.isRequested.validate();
+                                            setState(() {});
+                                          });
+                                        });
+                                      });
+                                    },
+                                  ),
+                                  4.width,
+                                  InkWell(
+                                    child: cachedImage(ic_close_square, height: 28, width: 28, color: Colors.red, fit: BoxFit.cover),
+                                    onTap: () {
+                                      suggestedMemberList.removeAt(index);
+                                      setState(() {});
+
+                                      ifNotTester(() async {
+                                        await removeSuggestedUser(userId: member.userId.validate()).then((value) {
+                                          //
+                                        }).catchError(onError);
+                                      });
+                                    },
+                                  ),
+                                ],
+                              )
+                            ],
+                          ).paddingSymmetric(vertical: 8),
+                        );
+                      },
+                      onNextPage: () {
+                        if (!mIsLastPage) {
+                          mPage++;
+                          setState(() {});
+                          future = getMembersList();
+                        }
+                      },
+                    );
+                  }
+                }
+
+                return Offstage();
+              },
+            )
+          else
+            FutureBuilder<List<MemberResponse>>(
+              future: future,
+              builder: (ctx, snap) {
+                if (snap.hasError) {
+                  return NoDataWidget(
+                    imageWidget: NoDataLottieWidget(),
+                    title: isError ? language.somethingWentWrong : language.noDataFound,
+                    onRetry: () {
+                      future = getMembersList();
+                    },
+                    retryText: '   ${language.clickToRefresh}   ',
+                  ).center();
+                }
+                if (snap.hasData) {
+                  if (snap.data.validate().isEmpty) {
+                    return NoDataWidget(
+                      imageWidget: NoDataLottieWidget(),
+                      title: isError ? language.somethingWentWrong : language.noDataFound,
+                      onRetry: () {
+                        future = getMembersList();
+                      },
+                      retryText: '   ${language.clickToRefresh}   ',
+                    ).center();
+                  } else {
+                    return AnimatedListView(
+                      shrinkWrap: true,
+                      controller: _controller,
+                      disposeScrollController: false,
+                      physics: AlwaysScrollableScrollPhysics(),
+                      slideConfiguration: SlideConfiguration(delay: 120.milliseconds),
+                      padding: EdgeInsets.only(left: 16, right: 16, bottom: 50),
+                      itemCount: memberList.length,
+                      itemBuilder: (context, index) {
+                        MemberResponse member = memberList[index];
+                        if (member.id.validate().toString() != appStore.loginUserId)
+                          return GestureDetector(
+                            onTap: () {
+                              MemberProfileScreen(memberId: member.id.validate()).launch(context);
+                            },
+                            child: Row(
+                              children: [
+                                cachedImage(
+                                  member.avatarUrls!.full.validate(),
+                                  height: 56,
+                                  width: 56,
+                                  fit: BoxFit.cover,
+                                ).cornerRadiusWithClipRRect(100),
+                                20.width,
+                                Column(
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Text(
+                                          member.name.validate(),
+                                          style: boldTextStyle(),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ).flexible(flex: 1),
+                                        if (member.isUserVerified.validate()) Image.asset(ic_tick_filled, width: 18, height: 18, color: blueTickColor).paddingSymmetric(horizontal: 4),
+                                      ],
+                                    ),
+                                    6.height,
+                                    Text(
+                                      member.mentionName.validate(),
+                                      style: secondaryTextStyle(),
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
+                                    ),
+                                  ],
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                ).expand(),
+                              ],
+                            ).paddingSymmetric(vertical: 8),
+                          );
+                        else
+                          return Offstage();
+                      },
+                      onNextPage: () {
+                        if (!mIsLastPage) {
+                          mPage++;
+                          setState(() {});
+                          future = getMembersList();
+                        }
+                      },
+                    );
+                  }
+                }
+
+                return Offstage();
+              },
+            ),
+          Positioned(
+            bottom: mPage != 1 ? 8 : null,
+            child: Observer(builder: (_) => LoadingWidget(isBlurBackground: mPage == 1 ? true : false).visible(appStore.isLoading)),
+          ),
+        ],
+      ),
+    );
+  }
+}

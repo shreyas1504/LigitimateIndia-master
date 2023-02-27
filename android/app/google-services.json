@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "341922803280",
+    "project_id": "legitimateindiaa",
+    "storage_bucket": "legitimateindiaa.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:341922803280:android:b0d33db6315a2721e7ab55",
+        "android_client_info": {
+          "package_name": "com.iconic.legitimateindia"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "341922803280-q5eofa7r1sqscphmckhdooh3eosv71hm.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.iconic.legitimateindia",
+            "certificate_hash": "375370753a9cd8affbe0bf343315ca0767af31d0"
+          }
+        },
+        {
+          "client_id": "341922803280-k4fima5gh9db0dv525omkaaq18tv0kev.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCwEamMvZ74FFRfWZi0ZZXUQy8VQ4gKEzI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "341922803280-k4fima5gh9db0dv525omkaaq18tv0kev.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
